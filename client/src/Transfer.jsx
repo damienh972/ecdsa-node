@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { BN } from 'bn.js';
 import server from "./server";
+import { signMessage } from "./signMessage";
 
-function Transfer({ address, setBalance }) {
+function Transfer({ address, setBalance, privateKey }) {
   const [sendAmount, setSendAmount] = useState("");
   const [recipient, setRecipient] = useState("");
 
@@ -10,17 +12,42 @@ function Transfer({ address, setBalance }) {
   async function transfer(evt) {
     evt.preventDefault();
 
+    if (!privateKey) {
+      alert("You must enter your private key");
+      return;
+    }
+
     try {
+      const { signature, messageHash, publicAddress, publicKey } =
+        await signMessage(privateKey);
+
+      if (publicAddress !== address.toLowerCase()) {
+        alert("Your private key does not match the wallet address you entered");
+        return;
+      }
+
+      const rBN = new BN(signature.r.toString());
+      const sBN = new BN(signature.s.toString());
+
+      const rHex = rBN.toString(16);
+      const sHex = sBN.toString(16);
+
+
       const {
         data: { balance },
       } = await server.post(`send`, {
+        rHex,
+        sHex,
+        recovery: signature.recovery,
+        messageHash,
+        publicKey,
         sender: address,
         amount: parseInt(sendAmount),
         recipient,
       });
       setBalance(balance);
-    } catch (ex) {
-      alert(ex.response.data.message);
+    } catch (error) {
+      alert(error.response.data.message);
     }
   }
 
